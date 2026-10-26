@@ -284,8 +284,29 @@ const colTop = new Int16Array(N * N);
 const queue = [];
 let dynOrder = [], dynCount = 0;
 let totalStatic = 0, broken = 0, collapsed = 0;
-let bTotal = [], bAlive = [], bDown = [];
+let bTotal = [], bAlive = [], bDown = [], bGround = [], bGroundAlive = [];
 
+// 블록이 빠진 칸을 모아 두었다가, 그 위에서 잠든 조각을 깨움 (안 깨우면 공중에 뜬 채 멈춤)
+const wakeCells = new Map();
+function markWake(x, y, z) {
+  const k = (Math.floor(x) + 128) * 512 + (Math.floor(z) + 128);
+  const old = wakeCells.get(k);
+  if (old === undefined || y < old) wakeCells.set(k, y);
+}
+function processWake() {
+  if (!wakeCells.size) return;
+  for (const L of lists) for (const p of L) {
+    if (p.state !== 1 || !p.body || !p.body.isSleeping()) continue;
+    const cx = Math.floor(p.x) + 128, cz = Math.floor(p.z) + 128;
+    let hit = false;
+    for (let dx = -1; dx <= 1 && !hit; dx++) for (let dz = -1; dz <= 1 && !hit; dz++) {
+      const y = wakeCells.get((cx + dx) * 512 + (cz + dz));
+      if (y !== undefined && p.y > y - 1.2) hit = true;
+    }
+    if (hit) p.body.wakeUp();
+  }
+  wakeCells.clear();
+}
 const M4 = new THREE.Matrix4(), V = new THREE.Vector3(), SV = new THREE.Vector3();
 const key = (i, j, k) => i + k * N + j * N * N;
 
@@ -303,6 +324,7 @@ function addPiece(x, y, z, s, color, m) {
 }
 function removePiece(p) {
   if (p.state < 0) return;
+  markWake(p.x, p.y, p.z);
   if (p.body) { phys.removeRigidBody(p.body); p.body = null; dynCount--; }
   if (p.col) { phys.removeCollider(p.col, true); p.col = null; }
   if (p.state === 0) staticMap.delete(p.key);
@@ -311,7 +333,7 @@ function removePiece(p) {
   meshes[p.m].count = L.length; dirty[p.m] = true; p.state = -1;
 }
 function makeDynamic(p, vx, vy, vz, spin) {
-  if (p.col) { phys.removeCollider(p.col, true); p.col = null; }
+  if (p.col) { phys.removeCollider(p.col, true); p.col = null; markWake(p.x, p.y, p.z); }
   const h = p.s / 2;
   const bd = RAPIER.RigidBodyDesc.dynamic()
     .setTranslation(p.x, p.y, p.z)
@@ -345,9 +367,29 @@ function enforceCap() {
 
 function scoreBlock(p) {
   broken++; score += 10 * combo;
-  if (p.bid >= 0 && !bDown[p.bid]) {
-    bAlive[p.bid]--;
-    if (bAlive[p.bid] < bTotal[p.bid] * 0.4 && bTotal[p.bid] > 3) { bDown[p.bid] = true; collapsed++; score += 300 * combo; }
+  if (p.bid < 0) return;
+  bAlive[p.bid]--;
+  if (p.gj === 0) bGroundAlive[p.bid]--;
+  if (bDown[p.bid] || bTotal[p.bid] <= 3) return;
+  // 1층이 절반 넘게 부서지거나 전체가 40% 아래로 남으면 건물이 통째로 무너짐
+  const weakBase = bGround[p.bid] >= 2 && bGroundAlive[p.bid] <= bGround[p.bid] * 0.5;
+  if (weakBase || bAlive[p.bid] < bTotal[p.bid] * 0.4) {
+    bDown[p.bid] = true; collapsed++; score += 300 * combo;
+    collapseBuilding(p.bid, p.x, p.z);
+  }
+}
+function collapseBuilding(bid, hx, hz) {
+  // 부서진 쪽으로 기울며 아래층부터 차례로 무너짐
+  let cx = 0, cz = 0, n = 0;
+  for (const q of staticMap.values()) if (q.bid === bid) { cx += q.x; cz += q.z; n++; }
+  if (!n) return;
+  cx /= n; cz /= n;
+  let ux = hx - cx, uz = hz - cz; const len = Math.hypot(ux, uz) || 1; ux /= len; uz /= len;
+  if (len < 0.3) { const a = Math.random() * Math.PI * 2; ux = Math.cos(a); uz = Math.sin(a); }
+  for (const q of staticMap.values()) {
+    if (q.bid !== bid) continue;
+    const lean = 0.6 + q.gj * 0.35;
+    queue.push({ p: q, t: clock + 0.05 + q.gj * 0.045 + Math.random() * 0.08, v: [ux * lean + rnd(-0.6, 0.6), -0.5, uz * lean + rnd(-0.6, 0.6)] });
   }
 }
 // 위에 얹힌 블록은 차례로 떨어지게 함
@@ -386,6 +428,26 @@ function split(p) {
   removePiece(p);
   return true;
 }
+// 공중에 멈춘 조각 찾기: 아래로 광선을 쏴서 받쳐 주는 것이 없으면 다시 떨어뜨림
+const DOWN = { x: 0, y: -1, z: 0 };
+let unstickAcc = 0;
+function unstick(dt) {
+  unstickAcc += dt;
+  if (unstickAcc < 0.4) return;
+  unstickAcc = 0;
+  for (const L of lists) for (let i = L.length - 1; i >= 0; i--) {
+    const p = L[i];
+    if (p.state !== 1 || !p.body || p.y < p.s * 0.9) continue;
+    const sleeping = p.body.isSleeping();
+    if (!sleeping) { const v = p.body.linvel(); if (v.x * v.x + v.y * v.y + v.z * v.z > 0.5) { p.stuck = 0; continue; } }
+    const hit = phys.castRay(new RAPIER.Ray({ x: p.x, y: p.y, z: p.z }, DOWN), 30, true, undefined, undefined, undefined, p.body);
+    if (hit && hit.timeOfImpact <= p.s * 0.9 + 0.3) { p.stuck = 0; continue; }
+    p.stuck = (p.stuck || 0) + 1;
+    if (p.stuck >= 3) { emit(p.x, p.y, p.z, 0, 0.5, 0, 0.8, 2, 0.8, '#b9b4ad', false, 0.7); removePiece(p); continue; }
+    p.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    p.body.setLinvel({ x: rnd(-0.3, 0.3), y: -1, z: rnd(-0.3, 0.3) }, true);
+  }
+}
 function syncBodies() {
   for (const m of [0, 1]) {
     const L = lists[m];
@@ -422,7 +484,7 @@ function canPlace(b) {
 }
 function addBuilding(b, bid) {
   const T = TYPES[b.type]; const [w, d, h] = dims(b);
-  bTotal[bid] = 0; bAlive[bid] = 0; bDown[bid] = false;
+  bTotal[bid] = 0; bAlive[bid] = 0; bDown[bid] = false; bGround[bid] = 0; bGroundAlive[bid] = 0;
   for (let i = 0; i < w; i++) for (let k = 0; k < d; k++) for (let j = 0; j < h; j++) {
     const gi = b.x + i, gk = b.z + k;
     let c, m = 0;
@@ -434,10 +496,10 @@ function addBuilding(b, bid) {
     const p = addPiece(x, y, z, 1, c, m);
     if (!p) return;
     p.gi = gi; p.gj = j; p.gk = gk; p.key = key(gi, j, gk); p.bid = bid;
-    p.col = phys.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 0.5, 0.5).setTranslation(x, y, z).setFriction(0.8), staticBody);
+    p.col = phys.createCollider(RAPIER.ColliderDesc.cuboid(0.5, 0.5, 0.5).setTranslation(x, y, z).setFriction(0.12).setFrictionCombineRule(RAPIER.CoefficientCombineRule.Min), staticBody);
     staticMap.set(p.key, p);
     colTop[gi + gk * N] = Math.max(colTop[gi + gk * N], j + 1);
-    totalStatic++; bTotal[bid]++; bAlive[bid]++;
+    totalStatic++; bTotal[bid]++; bAlive[bid]++; if (j === 0) { bGround[bid]++; bGroundAlive[bid]++; }
   }
 }
 function clearScene() {
@@ -448,7 +510,7 @@ function clearScene() {
   scorches.length = 0;
   for (const f of fallers) world.remove(f.obj);
   fallers.length = 0; quakeT = 0; bat = null; batMesh.visible = false; laser = null; beam.visible = false; laserLine.visible = false;
-  totalStatic = 0; broken = 0; collapsed = 0; score = 0; combo = 1; bTotal = []; bAlive = []; bDown = [];
+  totalStatic = 0; broken = 0; collapsed = 0; score = 0; combo = 1; bTotal = []; bAlive = []; bDown = []; bGround = []; bGroundAlive = [];
   groundBody.setNextKinematicTranslation({ x: 0, y: 0, z: 0 });
 }
 function buildCity() {
@@ -793,6 +855,11 @@ const QUAKE_HINTS = [
   [8.5, '진도 Ⅷ~Ⅸ 정도(어림) · 건물이 통째로 무너져요'],
   [11, '진도 Ⅹ 이상(어림) · 도시 전체가 무너져요'],
 ];
+const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+function openSide(p) {
+  const opts = SIDES.filter(([dx, dz]) => { const i = p.gi + dx, k = p.gk + dz; return i < 0 || k < 0 || i >= N || k >= N || !staticMap.has(key(i, p.gj, k)); });
+  return opts.length ? opts[(Math.random() * opts.length) | 0] : null;
+}
 function quakeHint(m) { for (const [lim, t] of QUAKE_HINTS) if (m < lim) return t; return ''; }
 function quake(pt) {
   startAction('quake');
@@ -823,7 +890,9 @@ function updateQuake(dt) {
       const d = Math.hypot(p.x - quakeAt.x, p.z - quakeAt.z);
       const near = Math.exp(-d / reach);
       const tall = quakeMag >= 8.5 ? 0.6 + 0.4 * (p.gj + 1) / 12 : (p.gj + 1) / 12;
-      if (Math.random() < near * tall * (0.4 + power)) detach(p, rnd(-2.5, 2.5), rnd(0.2, 2), rnd(-2.5, 2.5), 3);
+      if (Math.random() >= near * tall * (0.4 + power)) continue;
+      const open = openSide(p);
+      if (open) detach(p, open[0] * rnd(1.5, 3), rnd(0.2, 1.5), open[1] * rnd(1.5, 3), 2);
     }
   }
   if (quakeT <= 0) groundBody.setNextKinematicTranslation({ x: 0, y: 0, z: 0 });
@@ -1035,7 +1104,12 @@ function loop(now) {
 function tick(dt) {
   clock += dt;
   for (let i = queue.length - 1; i >= 0; i--) {
-    if (queue[i].t <= clock) { const q = queue[i].p; queue.splice(i, 1); if (q.state === 0) detach(q, rnd(-1.5, 1.5), -0.5, rnd(-1.5, 1.5), 1.5); }
+    if (queue[i].t <= clock) {
+      const it = queue[i]; queue.splice(i, 1);
+      if (it.p.state !== 0) continue;
+      if (it.v) detach(it.p, it.v[0], it.v[1], it.v[2], 1.2);
+      else detach(it.p, 0, -0.5, 0, 0);
+    }
   }
   updateQuake(dt); updateFallers(dt); updateBat(dt); updateLaser(dt);
   physAcc += dt; let n = 0;
@@ -1043,6 +1117,8 @@ function tick(dt) {
   if (n === 3) physAcc = 0;
   syncBodies();
   enforceCap();
+  processWake();
+  unstick(dt);
   updateParts(dt);
   flash.intensity *= 0.88;
   if (shake > 0.005 && !reduceMotion) { world.position.set(rnd(-shake, shake), rnd(-shake, shake) * 0.5, rnd(-shake, shake)); shake *= 0.9; }
@@ -1057,5 +1133,14 @@ layout = load() || [];
 if (!layout.length) randomCity();
 buildCity();
 requestAnimationFrame(loop);
-window.__blockcity = { advance: (sec) => { for (let t = 0; t < sec; t += STEP) tick(STEP); }, setMode, setSmashTool, staticCount: () => staticMap.size, dyn: () => dynCount, sleeping: () => { let s = 0; for (const L of lists) for (const p of L) if (p.state === 1 && p.body.isSleeping()) s++; return s; }, maxDynY: () => { let y = 0; for (const L of lists) for (const p of L) if (p.state === 1) y = Math.max(y, p.y); return y; } };
+function floatingCount() {
+  let n = 0;
+  for (const L of lists) for (const p of L) {
+    if (p.state !== 1 || !p.body || !p.body.isSleeping() || p.y < p.s * 0.95) continue;
+    const hit = phys.castRay(new RAPIER.Ray({ x: p.x, y: p.y, z: p.z }, DOWN), 20, true, undefined, undefined, undefined, p.body);
+    if (!hit || hit.timeOfImpact > p.s * 0.9 + 0.25) n++;
+  }
+  return n;
+}
+window.__blockcity = { floating: floatingCount, advance: (sec) => { for (let t = 0; t < sec; t += STEP) tick(STEP); }, setMode, setSmashTool, staticCount: () => staticMap.size, dyn: () => dynCount, sleeping: () => { let s = 0; for (const L of lists) for (const p of L) if (p.state === 1 && p.body.isSleeping()) s++; return s; }, maxDynY: () => { let y = 0; for (const L of lists) for (const p of L) if (p.state === 1) y = Math.max(y, p.y); return y; } };
 </script>
