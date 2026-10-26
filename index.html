@@ -158,8 +158,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import * as RAPIER from 'rapier';
 
 // ---------- 기본 설정 ----------
-const N = 24, HALF = N / 2;        // 짓는 땅: 24×24칸 (한 칸 = 블록 하나)
-const W = 34;                      // 바닥 반지름. 이 밖으로 나간 조각은 떨어져 사라짐
+const N = 36, HALF = N / 2;        // 짓는 땅: 36×36칸 (한 칸 = 블록 하나)
+const ROADS = [Math.round(N / 3), Math.round((2 * N) / 3)];  // 도로 가운데 줄 (가로·세로 두 줄씩)
+const W = 48;                      // 바닥 반지름. 이 밖으로 나간 조각은 떨어져 사라짐
 const CAP = 9000;                  // 화면에 그릴 조각 수 상한 (종류별)
 const DYN_CAP = 1700;              // 움직이는 조각 수 상한. 넘으면 오래 멈춘 잔해부터 치움
 const STEP = 1 / 60;
@@ -197,22 +198,22 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
 const SKY_DAY = new THREE.Color('#cfe8f3'), SKY_NIGHT = new THREE.Color('#0f1a2e');
 scene.background = SKY_DAY.clone();
-scene.fog = new THREE.Fog(SKY_DAY.clone(), 80, 170);
+scene.fog = new THREE.Fog(SKY_DAY.clone(), 120, 240);
 
 const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.maxPolarAngle = 1.42;
 controls.minDistance = 8;
-controls.maxDistance = 95;
+controls.maxDistance = 140;
 controls.target.set(0, 2, 0);
 
 const hemi = new THREE.HemisphereLight('#eef8ff', '#6f9a5c', 1.5);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight('#fff3dc', 2.4);
-sun.position.set(20, 34, 12);
+sun.position.set(26, 44, 16);
 sun.castShadow = true;
-Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 95 });
+Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 120 });
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0006;
 sun.shadow.normalBias = 0.03;
@@ -233,10 +234,11 @@ function lotTexture() {
   const px = 20, c = document.createElement('canvas'); c.width = c.height = N * px;
   const g = c.getContext('2d');
   g.fillStyle = '#cfe7b9'; g.fillRect(0, 0, c.width, c.height);
-  g.fillStyle = '#d8d2c2'; g.fillRect(10 * px, 0, 4 * px, c.height); g.fillRect(0, 10 * px, c.width, 4 * px);
-  g.fillStyle = '#8e959c'; g.fillRect(11 * px, 0, 2 * px, c.height); g.fillRect(0, 11 * px, c.width, 2 * px);
+  for (const r of ROADS) { g.fillStyle = '#d8d2c2'; g.fillRect((r - 2) * px, 0, 4 * px, c.height); g.fillRect(0, (r - 2) * px, c.width, 4 * px); }
+  for (const r of ROADS) { g.fillStyle = '#8e959c'; g.fillRect((r - 1) * px, 0, 2 * px, c.height); g.fillRect(0, (r - 1) * px, c.width, 2 * px); }
   g.fillStyle = '#f4f1e6';
-  for (let i = 0; i < N * px; i += 24) { if (Math.abs(i - 12 * px) > 2 * px) { g.fillRect(12 * px - 1, i, 2, 12); g.fillRect(i, 12 * px - 1, 12, 2); } }
+  const nearRoad = (i) => ROADS.some((r) => Math.abs(i - r * px) < 2 * px);
+  for (let i = 0; i < N * px; i += 24) { if (!nearRoad(i)) for (const r of ROADS) { g.fillRect(r * px - 1, i, 2, 12); g.fillRect(i, r * px - 1, 12, 2); } }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 function schoolLotTexture() {
@@ -488,12 +490,16 @@ const occ = new Int16Array(N * N).fill(-1);
 let rot = false;
 const SAVE_KEY = 'blockcity.layout.v1';
 let lotKind = 'city';
-function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 2, kind: lotKind, layout })); } catch (e) {} }
+function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 3, size: N, kind: lotKind, layout })); } catch (e) {} }
+function shiftOld(list, size) {
+  const off = Math.floor((N - (size || 24)) / 2);
+  return list.filter((b) => TYPES[b.type]).map((b) => ({ ...b, x: b.x + off, z: b.z + off })).filter((b) => { const [w, d] = dims(b); return b.x >= 0 && b.z >= 0 && b.x + w <= N && b.z + d <= N; });
+}
 function load() {
   try {
     const v = JSON.parse(localStorage.getItem(SAVE_KEY));
-    if (Array.isArray(v)) return v.filter((b) => TYPES[b.type]);
-    if (v && Array.isArray(v.layout)) { setLot(v.kind === 'school' ? 'school' : 'city'); return v.layout.filter((b) => TYPES[b.type]); }
+    if (Array.isArray(v)) return shiftOld(v, 24);
+    if (v && Array.isArray(v.layout)) { setLot(v.kind === 'school' ? 'school' : 'city'); return shiftOld(v.layout, v.size || 24); }
   } catch (e) {}
   return null;
 }
@@ -574,30 +580,32 @@ function randomSchool() {
   const rc = () => (Math.random() * 4) | 0;
   const plan = [];
   const right = Math.random() < 0.5;               // 별관이 오른쪽인지
-  const mainW = 14 + ((Math.random() * 5) | 0);    // 본관 길이 14~18칸
+  const mainW = 20 + ((Math.random() * 7) | 0);    // 본관 길이 20~26칸
   const mx = Math.floor((N - mainW) / 2);
   const mh = 4 + (Math.random() < 0.5 ? 1 : 0);
   const color = rc();
-  // 담장 (앞쪽 가운데는 정문)
+  // 담장 (앞쪽 가운데 4칸은 정문)
   plan.push({ type: 'wall', x: 0, z: 0, w: N, d: 1, h: 1, c: 0 });
   plan.push({ type: 'wall', x: 0, z: 1, w: 1, d: N - 2, h: 1, c: 0 });
   plan.push({ type: 'wall', x: N - 1, z: 1, w: 1, d: N - 2, h: 1, c: 0 });
-  plan.push({ type: 'wall', x: 0, z: N - 1, w: 10, d: 1, h: 1, c: 0 });
-  plan.push({ type: 'wall', x: 14, z: N - 1, w: 10, d: 1, h: 1, c: 0 });
-  // 본관, 별관, 시계탑
+  plan.push({ type: 'wall', x: 0, z: N - 1, w: HALF - 2, d: 1, h: 1, c: 0 });
+  plan.push({ type: 'wall', x: HALF + 2, z: N - 1, w: N - HALF - 2, d: 1, h: 1, c: 0 });
+  // 본관 두 동 + 둘을 잇는 별관, 시계탑
   plan.push({ type: 'school', x: mx, z: 2, w: mainW, d: 3, h: mh, c: color });
+  if (Math.random() < 0.75) plan.push({ type: 'school', x: right ? mx : mx + 6, z: 9, w: mainW - 6, d: 3, h: mh - 1, c: color });
   const ax = right ? mx + mainW - 3 : mx;
-  plan.push({ type: 'annex', x: ax, z: 5, w: 3, d: 5 + ((Math.random() * 2) | 0), h: mh - 1, c: color });
+  plan.push({ type: 'annex', x: ax, z: 5, w: 3, d: 7, h: mh - 1, c: color });
   plan.push({ type: 'clock', x: mx + Math.floor(mainW / 2), z: 5, c: 0 });
   // 운동장과 조회대, 체육관
-  const fw = 11 + ((Math.random() * 2) | 0), fx = right ? N - 2 - fw : 1 + 1;
-  plan.push({ type: 'field', x: fx, z: 13, w: fw, d: 8 });
-  plan.push({ type: 'stage', x: fx + Math.floor(fw / 2) - 1, z: 11, c: 0 });
-  const gx = right ? 2 : N - 2 - 7;
-  plan.push({ type: 'gym', x: gx, z: 14 + ((Math.random() * 2) | 0), w: 7, d: 5, h: 3, c: rc() });
+  const fw = 16 + ((Math.random() * 3) | 0), fd = 11, fz = N - 3 - fd;
+  const fx = right ? N - 2 - fw : 2;
+  plan.push({ type: 'field', x: fx, z: fz, w: fw, d: fd });
+  plan.push({ type: 'stage', x: fx + Math.floor(fw / 2) - 1, z: fz - 2, c: 0 });
+  const gx = right ? 2 : N - 2 - 9;
+  plan.push({ type: 'gym', x: gx, z: N - 3 - 6 - ((Math.random() * 3) | 0), w: 9, d: 6, h: 3, c: rc() });
   // 나무: 담장 안쪽 둘레에 띄엄띄엄
   for (let k = 2; k < N - 2; k += 2) { if (Math.random() < 0.7) plan.push({ type: 'tree', x: right ? 1 : N - 2, z: k, c: rc() }); }
-  for (let i = 2; i < N - 2; i += 2) { if ((i < 9 || i > 14) && Math.random() < 0.6) plan.push({ type: 'tree', x: i, z: N - 2, c: rc() }); }
+  for (let i = 2; i < N - 2; i += 2) { if ((i < HALF - 3 || i > HALF + 2) && Math.random() < 0.6) plan.push({ type: 'tree', x: i, z: N - 2, c: rc() }); }
   for (let i = 1; i < N - 1; i += 3) { if (Math.random() < 0.5) plan.push({ type: 'tree', x: i, z: 1, c: rc() }); }
   // 통째로 0/90/180/270도 돌리기
   const turns = (Math.random() * 4) | 0;
@@ -615,8 +623,9 @@ function randomSchool() {
 function randomCity() {
   layout = []; occ.fill(-1);
   const bag = ['house', 'house', 'house', 'house', 'apt', 'apt', 'apt', 'tower', 'tower', 'spire', 'tree', 'tree', 'tree', 'tree'];
-  const road = (i) => i >= 10 && i < 14;
-  for (let a = 0; a < 400 && layout.length < 46; a++) {
+  const road = (i) => ROADS.some((r) => i >= r - 2 && i < r + 2);
+  const maxB = Math.round(46 * (N * N) / (24 * 24));
+  for (let a = 0; a < 1200 && layout.length < maxB; a++) {
     const type = bag[(Math.random() * bag.length) | 0];
     const b = { type, x: (Math.random() * N) | 0, z: (Math.random() * N) | 0, rot: Math.random() < 0.5 ? 1 : 0, c: (Math.random() * 4) | 0 };
     const [w, d] = dims(b);
@@ -819,8 +828,8 @@ function updateFallers(dt) {
         explode(m.to.x, y, m.to.z, 6.5, 36, 0.15);
         scorch(m.to.x, m.to.z, 5); boomSound(1.6); shake = Math.max(shake, 0.6);
       } else {
-        explode(m.to.x, y, m.to.z, 15, 48, 0.32);
-        scorch(m.to.x, m.to.z, 12); nukeFx(m.to.x, m.to.z); boomSound(3); shake = Math.max(shake, 1.1);
+        explode(m.to.x, y, m.to.z, 19, 50, 0.4);
+        scorch(m.to.x, m.to.z, 15); nukeFx(m.to.x, m.to.z); boomSound(3); shake = Math.max(shake, 1.1);
       }
     }
   }
@@ -1187,7 +1196,7 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 const far = camera.aspect < 0.8;
-camera.position.set(far ? 30 : 24, far ? 34 : 22, far ? 40 : 28);
+camera.position.set(far ? 44 : 34, far ? 50 : 32, far ? 58 : 40);
 controls.update();
 
 let last = performance.now();
