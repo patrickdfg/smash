@@ -35,6 +35,7 @@ for(const z of [-54.5,-33.5]) cube(37,.03,.28,0,.33,z,roadline);
 cube(.25,.03,21,-18.5,.34,-44,roadline);cube(.25,.03,21,18.5,.34,-44,roadline);
 const white=mat(0xe4e9e8),cream=mat(0xe6d5b7),brick=mat(0xc9896a),windowMat=mat(0x568da1),roof=mat(0x57687b),shade=mat(0xb3becb),trunk=mat(0x795839),leaf=mat(0x4e9463);
 for(let i=0;i<33;i++){let x=-69+(i%12)*12,z=i<12?-49:i<23?49:-40+(i-23)*9;let tree=new THREE.Group();tree.position.set(x,0,z);scene.add(tree);cube(.65,3,.65,0,1.5,0,trunk,tree);const canopy=new THREE.Mesh(new THREE.IcosahedronGeometry(2.4,1),leaf);canopy.position.y=4.5;tree.add(canopy)}
+let blocks=[],debris=[],total=0,broken=0,score=0,tool='bomb',isNight=false,explosions=[];
 const osmSchool = {
   source: '© OpenStreetMap contributors (ODbL 1.0)',
   origin: [128.4793, 36.5789],
