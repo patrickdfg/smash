@@ -159,7 +159,7 @@ body { background: var(--sky); color: var(--ink); font-family: var(--font-body);
     <span class="sep"></span>
     <button class="tool" id="bNight" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z"/></svg>밤</button>
     <button class="tool" id="bRebuild"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 3-6.3"/><path d="M4 4v5h5"/></svg>다시 세우기</button>
-    <button class="tool" id="bSound" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg>소리 켬</button>
+    <button class="tool" id="bSound" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6"/></svg>소리 끔</button>
   </nav>
 
   <div class="loading" id="loading">물리 엔진을 불러오는 중이에요…</div>
@@ -804,7 +804,7 @@ function boomFx(x, y, z, R) {
 }
 
 // ---------- 소리 (Web Audio로 합성) ----------
-let ac = null, soundOn = false;
+let ac = null, soundOn = true;
 function audio() {
   if (!soundOn) return null;
   if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
