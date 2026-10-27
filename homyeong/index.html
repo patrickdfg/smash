@@ -3,7 +3,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>호명초 3D 부수기 · 배치 확인 전 시제품</title>
+<title>호명초 3D 부수기 · 지도 윤곽 적용</title>
 <style>
 :root{font-family:system-ui,"Noto Sans KR",sans-serif;color:#f8fafc}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111b2b}#view{position:absolute;inset:0}canvas{display:block}
 .top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;gap:10px;align-items:start;padding:16px;pointer-events:none}.top>*{pointer-events:auto}.brand{background:#0b1523d9;border:1px solid #ffffff30;border-radius:16px;padding:11px 15px;backdrop-filter:blur(10px)}h1{font-size:19px;margin:0 0 3px}.brand small{color:#cbd5e1;font-size:11px}.score{text-align:right;background:#0b1523d9;border:1px solid #ffffff30;border-radius:15px;padding:10px 14px;font-size:12px}.score strong{font-size:25px;color:#fbbf24;display:block;font-variant-numeric:tabular-nums}.dock{position:absolute;bottom:max(12px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:8px;background:#0b1523e8;border:1px solid #ffffff2b;border-radius:20px;box-shadow:0 15px 40px #0005;max-width:calc(100% - 16px);overflow:auto}.tool{border:1px solid transparent;border-radius:13px;background:#243249;color:white;min-width:65px;min-height:63px;padding:7px;cursor:pointer;font-weight:700;font-size:12px}.tool span{display:block;font-size:23px;margin-bottom:2px}.tool.active{background:#f6b94d;color:#172033;border-color:#fff}.tool:focus-visible{outline:2px solid white}.notice{position:absolute;top:150px;left:16px;max-width:330px;background:#0b1523c9;padding:11px 13px;border-radius:12px;font-size:12px;line-height:1.65;color:#d7e4f5}.help{position:absolute;right:16px;bottom:105px;background:#0b1523c9;padding:8px 11px;border-radius:10px;font-size:11px;color:#d7e4f5}.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .45s}a{color:#9ed9ff}.back-link{display:inline-block;margin-top:8px;color:#fff;background:#315779;border-radius:9px;padding:7px 10px;text-decoration:none;font-size:12px;font-weight:700} @media(max-width:620px){.top{padding:8px}.brand{padding:8px 10px}h1{font-size:15px}.brand small{font-size:9px}.score{padding:6px 9px}.score strong{font-size:20px}.notice{top:138px;left:8px;max-width:230px;font-size:10px}.help{display:none}.dock{width:calc(100% - 12px);justify-content:space-around}.tool{min-width:58px;padding:6px;font-size:11px}}
@@ -11,8 +11,8 @@
 </head>
 <body>
 <div id="view"></div>
-<header class="top"><div class="brand"><h1>🏫 호명초 3D 부수기</h1><small>예천 호명초등학교 · 배치 확인 전 시제품</small><div><a class="back-link" href="../">← 블록시티로 돌아가기</a></div></div><div class="score">점수<strong id="points">0</strong><span id="percent">파괴율 0%</span></div></header>
-<div class="notice">⚠️ 현재 건물 배치는 임시 모델입니다.<br>실제 위성지도·학교 전경 확인 후 수정합니다.<br>건물을 누르거나 터치해서 부숴 보세요.</div>
+<header class="top"><div class="brand"><h1>🏫 호명초 3D 부수기</h1><small>예천 호명초등학교 · 실제 지도 윤곽 적용</small><div><a class="back-link" href="../">← 블록시티로 돌아가기</a></div></div><div class="score">점수<strong id="points">0</strong><span id="percent">파괴율 0%</span></div></header>
+<div class="notice">⚠️ 실제 OSM 교사동 윤곽을 적용했습니다.<br>층수·외벽 색상은 추가 확인이 필요합니다.<br>건물을 누르거나 터치해서 부숴 보세요.</div>
 <div class="help">드래그: 회전 · 휠/두 손가락: 확대 · 1~3: 도구</div>
 <nav class="dock" aria-label="게임 도구">
 <button class="tool active" data-tool="bomb"><span>💣</span>폭탄</button>
@@ -30,21 +30,50 @@ scene.add(new THREE.HemisphereLight(0xffffff,0x60708a,2.1));const sun=new THREE.
 const mat=(c)=>new THREE.MeshStandardMaterial({color:c,roughness:.78});const green=mat(0x77a977),asphalt=mat(0x6b7480),roadline=mat(0xe5edf4),track=mat(0xc7855a),lawn=mat(0x4c8d65);
 function cube(w,h,d,x,y,z,m,parent=scene){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.receiveShadow=true;o.castShadow=true;parent.add(o);return o}
 cube(180,1,140,0,-.7,0,green);cube(153,.25,112,0,-.09,0,lawn);cube(151,.08,8,0,.02,57,asphalt);cube(8,.08,112,70,.02,0,asphalt);
-const field=cube(53,.16,37,34,.1,-19,track);cube(36,.18,19,34,.21,-19,green);
-for(const z of [-28.5,-9.5]) cube(36,.03,.28,34,.33,z,roadline);
-cube(.25,.03,19,16,.34,-19,roadline);cube(.25,.03,19,52,.34,-19,roadline);
+const field=cube(54,.16,39,0,.1,-44,track);cube(37,.18,21,0,.21,-44,green);
+for(const z of [-54.5,-33.5]) cube(37,.03,.28,0,.33,z,roadline);
+cube(.25,.03,21,-18.5,.34,-44,roadline);cube(.25,.03,21,18.5,.34,-44,roadline);
 const white=mat(0xe4e9e8),cream=mat(0xe6d5b7),brick=mat(0xc9896a),windowMat=mat(0x568da1),roof=mat(0x57687b),shade=mat(0xb3becb),trunk=mat(0x795839),leaf=mat(0x4e9463);
 for(let i=0;i<33;i++){let x=-69+(i%12)*12,z=i<12?-49:i<23?49:-40+(i-23)*9;let tree=new THREE.Group();tree.position.set(x,0,z);scene.add(tree);cube(.65,3,.65,0,1.5,0,trunk,tree);const canopy=new THREE.Mesh(new THREE.IcosahedronGeometry(2.4,1),leaf);canopy.position.y=4.5;tree.add(canopy)}
-const buildingSpecs=[
-{name:'교사동 A',x:-35,z:-24,w:52,d:13,floors:4,color:cream},
-{name:'교사동 B',x:-45,z:2,w:13,d:38,floors:4,color:white},
-{name:'교사동 C',x:-20,z:20,w:37,d:13,floors:4,color:brick},
-{name:'체육관',x:29,z:27,w:32,d:21,floors:2,color:white}
-];
-let blocks=[],debris=[],total=0,broken=0,score=0,tool='bomb',isNight=false,explosions=[];
-function makeSchool(){for(const o of [...blocks,...debris]){scene.remove(o);o.geometry.dispose()}blocks=[];debris=[];total=0;broken=0;score=0;updateScore();for(const s of buildingSpecs){const group=new THREE.Group();group.position.set(s.x,0,s.z);scene.add(group);const section=4;const nx=Math.round(s.w/section),nz=Math.round(s.d/section),unitX=s.w/nx,unitZ=s.d/nz,fh=s.name==='체육관'?4.5:3.3;
-for(let y=0;y<s.floors;y++)for(let i=0;i<nx;i++)for(let j=0;j<nz;j++){if(i>0&&i<nx-1&&j>0&&j<nz-1)continue;const ix=(i+.5)*unitX-s.w/2,iz=(j+.5)*unitZ-s.d/2;let material=(i+j+y)%7===0?windowMat:s.color;const o=cube(unitX-.06,fh-.07,unitZ-.06,ix,fh*(y+.5),iz,material,group);o.userData={building:s.name,alive:true,velocity:new THREE.Vector3(),spin:new THREE.Vector3(),home:new THREE.Vector3(s.x+ix,fh*(y+.5),s.z+iz)};blocks.push(o);total++}
-const r=cube(s.w+1,.35,s.d+1,0,fh*s.floors+.2,0,roof,group);r.userData={building:s.name,alive:true,velocity:new THREE.Vector3(),spin:new THREE.Vector3(),home:new THREE.Vector3(s.x,fh*s.floors+.2,s.z)};blocks.push(r);total++}}
+const osmSchool = {
+  source: '© OpenStreetMap contributors (ODbL 1.0)',
+  origin: [128.4793, 36.5789],
+  boundary: [[128.4784995,36.5782062],[128.4785279,36.5797563],[128.4788592,36.5794655],[128.4801067,36.5794637],[128.4801106,36.5789019],[128.4800822,36.5787873],[128.4801433,36.5784247],[128.480101,36.5783524]],
+  building: [[128.4788819,36.578868],[128.4799555,36.5788569],[128.4799579,36.5790106],[128.479513,36.5790152],[128.4795156,36.5791776],[128.4799191,36.5791734],[128.4799229,36.5794072],[128.4791833,36.579415],[128.479182,36.579338],[128.4789399,36.5793405],[128.4789383,36.5792406],[128.4793064,36.5792368],[128.4793029,36.5790189],[128.4788844,36.5790231]]
+};
+const toMeters=([lon,lat])=>new THREE.Vector2((lon-osmSchool.origin[0])*89300,(lat-osmSchool.origin[1])*111000);
+const footprint=osmSchool.building.map(toMeters);
+const boundary=osmSchool.boundary.map(toMeters);
+let buildingGroups=[];
+function makeSchool(){
+  for(const o of [...blocks,...debris]){if(o.parent)o.parent.remove(o);o.geometry.dispose()}
+  for(const g of buildingGroups)scene.remove(g);
+  buildingGroups=[];blocks=[];debris=[];total=0;broken=0;score=0;
+  const group=new THREE.Group();scene.add(group);buildingGroups.push(group);
+  const floorHeight=3.3, floors=4; // 정확한 층수 자료 확보 전 임시값
+  for(let floor=0;floor<floors;floor++){
+    for(let i=0;i<footprint.length;i++){
+      const a=footprint[i],b=footprint[(i+1)%footprint.length];
+      const dx=b.x-a.x,dz=b.y-a.y,len=Math.hypot(dx,dz),parts=Math.max(1,Math.ceil(len/3.5));
+      for(let j=0;j<parts;j++){
+        const t=(j+.5)/parts;
+        const color=(j%4===1)?windowMat:(floor===0?cream:white);
+        const o=cube(len/parts-.07,floorHeight-.08,.72,a.x+dx*t,floorHeight*(floor+.5),a.y+dz*t,color,group);
+        o.rotation.y=-Math.atan2(dz,dx);
+        o.userData={building:'호명초 교사동',alive:true,velocity:new THREE.Vector3(),spin:new THREE.Vector3()};
+        blocks.push(o);total++;
+      }
+    }
+  }
+  const shape=new THREE.Shape();footprint.forEach((p,i)=>i?shape.lineTo(p.x,p.y):shape.moveTo(p.x,p.y));shape.closePath();
+  const roofGeometry=new THREE.ShapeGeometry(shape);
+  const roofMesh=new THREE.Mesh(roofGeometry,new THREE.MeshStandardMaterial({color:0x657587,side:THREE.DoubleSide,roughness:.7}));
+  roofMesh.rotation.x=Math.PI/2;roofMesh.position.y=floors*floorHeight+.3;
+  roofMesh.castShadow=true;roofMesh.receiveShadow=true;group.add(roofMesh);
+  roofMesh.userData={building:'호명초 교사동',alive:true,velocity:new THREE.Vector3(),spin:new THREE.Vector3()};
+  blocks.push(roofMesh);total++;
+  updateScore();
+}
 function updateScore(){document.getElementById('points').textContent=score.toLocaleString('ko-KR');document.getElementById('percent').textContent='파괴율 '+(total?Math.round(broken/total*100):0)+'%'}
 makeSchool();
 function updateCamera(){pitch=Math.max(.22,Math.min(1.42,pitch));dist=Math.max(28,Math.min(225,dist));camera.position.set(target.x+dist*Math.sin(pitch)*Math.sin(yaw),target.y+dist*Math.cos(pitch),target.z+dist*Math.sin(pitch)*Math.cos(yaw));camera.lookAt(target)}
